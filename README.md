@@ -1,6 +1,6 @@
 # Floor Plan Generator
 
-A small rule-based 2D layout tool built with Next.js. Enter a plot size and simple zoning rules (front, rear and side setbacks, max building coverage) and the canvas shows the plot, the setback lines, the buildable envelope, the largest footprint the rules allow, and a simple split of that footprint into living, service and private zones. Everything updates as you type.
+A small rule-based 2D layout tool built with Next.js. Enter a plot size and simple zoning rules (front, rear and side setbacks, max building coverage) and the canvas shows the plot, the setback lines, the buildable envelope, the largest footprint the rules allow with its dimensions, and a simple split of that footprint into living, service and private zones. Everything updates as you type.
 
 ![Floor plan generator screenshot](docs/screenshot.png)
 
@@ -23,7 +23,7 @@ All zoning logic lives in pure functions in [`src/lib/rules.ts`](src/lib/rules.t
 - `computeZones` splits the footprint into full-width bands across its depth: living faces the street, service sits in the middle and private is at the rear. The shares (40 / 25 / 35 % of the depth) are in `ZONE_SHARES`.
 - `computePlan` runs all of these and returns a result or a readable error.
 
-The UI only validates input and draws what these functions return, so the rules are easy to test and extend.
+The UI only validates input and draws what these functions return (dimension chains along the top and right edges show the setbacks and the footprint size), so the rules are easy to test and extend.
 
 ## Getting started
 
@@ -37,5 +37,5 @@ npm test        # rule unit tests
 
 - [x] Plot, setbacks, buildable envelope and coverage-limited footprint
 - [x] Simple zone split (living / service / private)
-- [ ] Dimension labels for setbacks and footprint
+- [x] Dimension labels for setbacks and footprint
 - [ ] Pan and zoom
