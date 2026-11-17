@@ -10,7 +10,7 @@ interface Props {
   plan: PlanResult;
 }
 
-const PADDING = 56; // px around the plot for labels
+const PADDING = 72; // px around the plot for dimension lines
 const MIN_LABEL_PX = { width: 56, height: 30 }; // hide zone labels in smaller bands
 
 const COLORS = {
@@ -21,6 +21,69 @@ const COLORS = {
   label: "#3f3f46",
   street: "#a1a1aa",
 };
+
+/** Metres, trimmed to at most 2 decimals: 1.5 -> "1.5 m", 13.4164 -> "13.42 m". */
+const fmt = (m: number) => `${+m.toFixed(2)} m`;
+
+/**
+ * Horizontal or vertical dimension line with end ticks and a centred label.
+ * Text sits above (horizontal) or left of the line, or right with `textRight`.
+ * Zero-length segments draw nothing; labels that don't fit are hidden.
+ */
+function Dim({
+  x1,
+  y1,
+  x2,
+  y2,
+  label,
+  textRight = false,
+}: {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  label: string;
+  textRight?: boolean;
+}) {
+  const vertical = x1 === x2;
+  const len = vertical ? y2 - y1 : x2 - x1;
+  if (len < 1) return null;
+  const t = 4; // tick half-length, px
+  const ticks = vertical
+    ? [x1 - t, y1, x1 + t, y1, x2 - t, y2, x2 + t, y2]
+    : [x1, y1 - t, x1, y1 + t, x2, y2 - t, x2, y2 + t];
+  const fits = len >= label.length * 6.5;
+  return (
+    <>
+      <Line points={[x1, y1, x2, y2]} stroke={COLORS.label} strokeWidth={1} />
+      <Line points={ticks.slice(0, 4)} stroke={COLORS.label} strokeWidth={1} />
+      <Line points={ticks.slice(4)} stroke={COLORS.label} strokeWidth={1} />
+      {fits &&
+        (vertical ? (
+          <Text
+            x={textRight ? x1 + 5 : x1 - 17}
+            y={y2}
+            width={len}
+            align="center"
+            rotation={-90}
+            text={label}
+            fontSize={11}
+            fill={COLORS.label}
+          />
+        ) : (
+          <Text
+            x={x1}
+            y={y1 - 15}
+            width={len}
+            align="center"
+            text={label}
+            fontSize={11}
+            fill={COLORS.label}
+          />
+        ))}
+    </>
+  );
+}
 
 export default function PlanCanvas({ rules, plan }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -114,38 +177,65 @@ export default function PlanCanvas({ rules, plan }: Props) {
               </>
             )}
 
-            {/* Width dimension (top) */}
-            <Line
-              points={[origin.x, origin.y - 20, origin.x + plotPx.w, origin.y - 20]}
-              stroke={COLORS.label}
-              strokeWidth={1}
+            {/* Overall plot dimensions */}
+            <Dim
+              x1={origin.x}
+              y1={origin.y - 44}
+              x2={origin.x + plotPx.w}
+              y2={origin.y - 44}
+              label={fmt(plotWidth)}
             />
-            <Text
-              x={origin.x}
-              y={origin.y - 38}
-              width={plotPx.w}
-              align="center"
-              text={`${plotWidth} m`}
-              fontSize={12}
-              fill={COLORS.label}
+            <Dim
+              x1={origin.x - 20}
+              y1={origin.y}
+              x2={origin.x - 20}
+              y2={origin.y + plotPx.h}
+              label={fmt(plotDepth)}
             />
 
-            {/* Depth dimension (left) */}
-            <Line
-              points={[origin.x - 20, origin.y, origin.x - 20, origin.y + plotPx.h]}
-              stroke={COLORS.label}
-              strokeWidth={1}
-            />
-            <Text
-              x={origin.x - 38}
-              y={origin.y + plotPx.h}
-              width={plotPx.h}
-              align="center"
-              rotation={-90}
-              text={`${plotDepth} m`}
-              fontSize={12}
-              fill={COLORS.label}
-            />
+            {/* Chains: side setback | footprint width | side setback (top),
+                rear setback | footprint depth | front setback (right) */}
+            {plan.ok &&
+              (() => {
+                const fp = plan.footprint.rect;
+                const across: [number, number][] = [
+                  [0, rules.sideSetback],
+                  [fp.x, fp.x + fp.width],
+                  [plotWidth - rules.sideSetback, plotWidth],
+                ];
+                const along: [number, number][] = [
+                  [0, rules.rearSetback],
+                  [fp.y, fp.y + fp.depth],
+                  [plotDepth - rules.frontSetback, plotDepth],
+                ];
+                const top = origin.y - 20;
+                const right = origin.x + plotPx.w + 20;
+                return (
+                  <>
+                    {across.map(([a, b], i) => (
+                      <Dim
+                        key={`w${i}`}
+                        x1={origin.x + a * scale}
+                        y1={top}
+                        x2={origin.x + b * scale}
+                        y2={top}
+                        label={fmt(b - a)}
+                      />
+                    ))}
+                    {along.map(([a, b], i) => (
+                      <Dim
+                        key={`d${i}`}
+                        x1={right}
+                        y1={origin.y + a * scale}
+                        x2={right}
+                        y2={origin.y + b * scale}
+                        label={fmt(b - a)}
+                        textRight
+                      />
+                    ))}
+                  </>
+                );
+              })()}
 
             {/* Street */}
             <Text
