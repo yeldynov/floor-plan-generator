@@ -1,9 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { computePlan, type PlotRules } from "@/lib/rules";
 import { defaultRules, plotRulesSchema } from "@/lib/schema";
+import { ZONE_STYLE } from "./zoneStyle";
 
 // Konva needs the browser canvas API, so skip server rendering for it.
 const PlanCanvas = dynamic(() => import("./PlanCanvas"), { ssr: false });
@@ -100,6 +101,20 @@ export default function PlanEditor() {
               </dd>
               <dt>Limited by</dt>
               <dd className="text-right">{plan.footprint.limitedBy}</dd>
+              <dt className="col-span-2 mt-3 font-medium text-zinc-900">Zones</dt>
+              {plan.zones.map((zone) => (
+                <Fragment key={zone.kind}>
+                  <dt className="flex items-center gap-2">
+                    <span
+                      aria-hidden
+                      className="size-3 rounded-sm border border-zinc-400"
+                      style={{ backgroundColor: ZONE_STYLE[zone.kind].fill }}
+                    />
+                    {ZONE_STYLE[zone.kind].label}
+                  </dt>
+                  <dd className="text-right tabular-nums">{zone.area.toFixed(1)} m²</dd>
+                </Fragment>
+              ))}
             </dl>
           ) : (
             <p className="text-red-600">{plan.error}</p>

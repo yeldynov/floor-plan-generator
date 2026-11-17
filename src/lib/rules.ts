@@ -44,8 +44,26 @@ export interface Footprint {
   limitedBy: "setbacks" | "coverage";
 }
 
+export type ZoneKind = "living" | "service" | "private";
+
+export interface Zone {
+  kind: ZoneKind;
+  rect: Rect;
+  area: number;
+}
+
+/**
+ * Share of the footprint depth given to each zone, ordered from the street
+ * (front) to the rear. Generic example values; they must add up to 1.
+ */
+export const ZONE_SHARES: readonly { kind: ZoneKind; share: number }[] = [
+  { kind: "living", share: 0.4 },
+  { kind: "service", share: 0.25 },
+  { kind: "private", share: 0.35 },
+];
+
 export type PlanResult =
-  | { ok: true; plotArea: number; envelope: Envelope; footprint: Footprint }
+  | { ok: true; plotArea: number; envelope: Envelope; footprint: Footprint; zones: Zone[] }
   | { ok: false; plotArea: number; error: string };
 
 export const rectArea = (r: Rect) => r.width * r.depth;
@@ -104,6 +122,23 @@ export function computeFootprint(rules: PlotRules, envelope: Envelope): Footprin
   };
 }
 
+/**
+ * Splits the footprint into full-width bands across its depth: living faces
+ * the street, service sits in the middle and private is at the rear.
+ * Zones are returned front to rear and exactly tile the footprint.
+ */
+export function computeZones(footprint: Rect): Zone[] {
+  const front = footprint.y + footprint.depth;
+  let edge = front;
+  return ZONE_SHARES.map(({ kind, share }, i) => {
+    // The last band snaps to the rear edge so rounding never leaves a gap.
+    const next = i === ZONE_SHARES.length - 1 ? footprint.y : edge - footprint.depth * share;
+    const rect: Rect = { x: footprint.x, y: next, width: footprint.width, depth: edge - next };
+    edge = next;
+    return { kind, rect, area: rectArea(rect) };
+  });
+}
+
 /** Runs all rules and returns either a full plan or a readable error. */
 export function computePlan(rules: PlotRules): PlanResult {
   const plotArea = rules.plotWidth * rules.plotDepth;
@@ -114,5 +149,6 @@ export function computePlan(rules: PlotRules): PlanResult {
   if (rules.maxCoverage <= 0) {
     return { ok: false, plotArea, error: "Max coverage must be above 0%." };
   }
-  return { ok: true, plotArea, envelope, footprint: computeFootprint(rules, envelope) };
+  const footprint = computeFootprint(rules, envelope);
+  return { ok: true, plotArea, envelope, footprint, zones: computeZones(footprint.rect) };
 }

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { computeEnvelope, computeFootprint, computePlan, type PlotRules } from "./rules";
+import {
+  ZONE_SHARES,
+  computeEnvelope,
+  computeFootprint,
+  computePlan,
+  computeZones,
+  type PlotRules,
+} from "./rules";
 
 const base: PlotRules = {
   plotWidth: 20,
@@ -51,6 +58,40 @@ describe("computeFootprint", () => {
   });
 });
 
+describe("computeZones", () => {
+  const footprint = { x: 2, y: 2, width: 16, depth: 24 };
+
+  it("shares add up to the whole footprint", () => {
+    expect(ZONE_SHARES.reduce((sum, z) => sum + z.share, 0)).toBeCloseTo(1);
+  });
+
+  it("orders zones from the street to the rear", () => {
+    expect(computeZones(footprint).map((z) => z.kind)).toEqual(["living", "service", "private"]);
+  });
+
+  it("splits the depth by the zone shares at full width", () => {
+    const [living, service, priv] = computeZones(footprint);
+    expect(living.rect).toEqual({ x: 2, y: 2 + 24 * 0.6, width: 16, depth: 24 * 0.4 });
+    expect(service.rect.depth).toBeCloseTo(24 * 0.25);
+    expect(priv.rect.depth).toBeCloseTo(24 * 0.35);
+    for (const z of [living, service, priv]) {
+      expect(z.rect.x).toBe(2);
+      expect(z.rect.width).toBe(16);
+    }
+  });
+
+  it("tiles the footprint with no gaps or overlaps", () => {
+    const zones = computeZones(footprint);
+    expect(zones[0].rect.y + zones[0].rect.depth).toBeCloseTo(footprint.y + footprint.depth);
+    for (let i = 1; i < zones.length; i++) {
+      expect(zones[i].rect.y + zones[i].rect.depth).toBe(zones[i - 1].rect.y);
+    }
+    expect(zones.at(-1)!.rect.y).toBe(footprint.y);
+    const total = zones.reduce((sum, z) => sum + z.area, 0);
+    expect(total).toBeCloseTo(footprint.width * footprint.depth);
+  });
+});
+
 describe("computePlan", () => {
   it("returns an error for impossible setbacks", () => {
     const res = computePlan({ ...base, sideSetback: 12 });
@@ -63,6 +104,9 @@ describe("computePlan", () => {
     if (res.ok) {
       expect(res.plotArea).toBe(600);
       expect(res.footprint.coverage).toBeLessThanOrEqual(60 + 1e-9);
+      expect(res.zones).toHaveLength(3);
+      const zoneTotal = res.zones.reduce((sum, z) => sum + z.area, 0);
+      expect(zoneTotal).toBeCloseTo(res.footprint.area);
     }
   });
 });
