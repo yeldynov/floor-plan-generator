@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
+import type { KonvaEventObject } from "konva/lib/Node";
 import { Layer, Line, Rect, Stage, Text } from "react-konva";
 import type { PlanResult, PlotRules, Rect as PlanRect } from "@/lib/rules";
 import { ZONE_STYLE } from "./zoneStyle";
@@ -11,6 +12,8 @@ interface Props {
 }
 
 const PADDING = 72; // px around the plot for dimension lines
+const ZOOM = { min: 0.5, max: 8, step: 1.1 };
+const HOME_VIEW = { zoom: 1, x: 0, y: 0 };
 const MIN_LABEL_PX = { width: 56, height: 30 }; // hide zone labels in smaller bands
 
 const COLORS = {
@@ -88,6 +91,21 @@ function Dim({
 export default function PlanCanvas({ rules, plan }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  // Pan/zoom applied on top of the fit-to-container layout below.
+  const [view, setView] = useState(HOME_VIEW);
+
+  // Zoom in/out around the pointer, so the point under the cursor stays put.
+  const onWheel = (e: KonvaEventObject<WheelEvent>) => {
+    e.evt.preventDefault();
+    const pointer = e.target.getStage()?.getPointerPosition();
+    if (!pointer) return;
+    setView((v) => {
+      const factor = e.evt.deltaY < 0 ? ZOOM.step : 1 / ZOOM.step;
+      const zoom = Math.min(ZOOM.max, Math.max(ZOOM.min, v.zoom * factor));
+      const k = zoom / v.zoom;
+      return { zoom, x: pointer.x - (pointer.x - v.x) * k, y: pointer.y - (pointer.y - v.y) * k };
+    });
+  };
 
   useEffect(() => {
     const el = containerRef.current;
@@ -118,7 +136,25 @@ export default function PlanCanvas({ rules, plan }: Props) {
   return (
     <div ref={containerRef} className="h-full w-full">
       {scale > 0 && (
-        <Stage width={size.width} height={size.height}>
+        <Stage
+          width={size.width}
+          height={size.height}
+          x={view.x}
+          y={view.y}
+          scaleX={view.zoom}
+          scaleY={view.zoom}
+          draggable
+          onWheel={onWheel}
+          onDragEnd={(e) => {
+            // Only the stage itself is draggable; ignore bubbled child events.
+            if (e.target === e.target.getStage()) {
+              setView((v) => ({ ...v, x: e.target.x(), y: e.target.y() }));
+            }
+          }}
+          onDblClick={() => setView(HOME_VIEW)}
+          onDblTap={() => setView(HOME_VIEW)}
+          className="cursor-grab active:cursor-grabbing"
+        >
           <Layer>
             {/* Plot */}
             <Rect
@@ -251,6 +287,18 @@ export default function PlanCanvas({ rules, plan }: Props) {
           </Layer>
         </Stage>
       )}
+      {view !== HOME_VIEW && (
+        <button
+          type="button"
+          onClick={() => setView(HOME_VIEW)}
+          className="absolute right-3 top-3 rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700 shadow-sm hover:bg-zinc-50"
+        >
+          Reset view
+        </button>
+      )}
+      <p className="pointer-events-none absolute bottom-2 left-3 text-[11px] text-zinc-400">
+        Drag to pan · scroll to zoom · double-click to reset
+      </p>
     </div>
   );
 }
