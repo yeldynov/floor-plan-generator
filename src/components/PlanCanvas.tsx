@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Layer, Line, Rect, Stage, Text } from "react-konva";
 import type { PlanResult, PlotRules, Rect as PlanRect } from "@/lib/rules";
+import { ZONE_STYLE } from "./zoneStyle";
 
 interface Props {
   rules: PlotRules;
@@ -10,12 +11,12 @@ interface Props {
 }
 
 const PADDING = 56; // px around the plot for labels
+const MIN_LABEL_PX = { width: 56, height: 30 }; // hide zone labels in smaller bands
 
 const COLORS = {
   plot: "#f4f4f5",
   plotStroke: "#52525b",
   envelope: "#2563eb",
-  footprint: "rgba(37, 99, 235, 0.22)",
   footprintStroke: "#1d4ed8",
   label: "#3f3f46",
   street: "#a1a1aa",
@@ -76,20 +77,39 @@ export default function PlanCanvas({ rules, plan }: Props) {
                   strokeWidth={1.5}
                   dash={[8, 6]}
                 />
-                {/* Building footprint */}
+                {/* Zones inside the footprint */}
+                {plan.zones.map((zone) => {
+                  const px = toPx(zone.rect);
+                  const style = ZONE_STYLE[zone.kind];
+                  const showLabel =
+                    px.width >= MIN_LABEL_PX.width && px.height >= MIN_LABEL_PX.height;
+                  return (
+                    <Fragment key={zone.kind}>
+                      <Rect
+                        {...px}
+                        fill={style.fill}
+                        stroke={COLORS.footprintStroke}
+                        strokeWidth={0.75}
+                      />
+                      {showLabel && (
+                        <Text
+                          {...px}
+                          text={`${style.label}\n${zone.area.toFixed(1)} m²`}
+                          align="center"
+                          verticalAlign="middle"
+                          fontSize={12}
+                          lineHeight={1.3}
+                          fill={style.text}
+                        />
+                      )}
+                    </Fragment>
+                  );
+                })}
+                {/* Building footprint outline */}
                 <Rect
                   {...toPx(plan.footprint.rect)}
-                  fill={COLORS.footprint}
                   stroke={COLORS.footprintStroke}
                   strokeWidth={2}
-                />
-                <Text
-                  {...toPx(plan.footprint.rect)}
-                  text={`Footprint\n${plan.footprint.area.toFixed(1)} m²`}
-                  align="center"
-                  verticalAlign="middle"
-                  fontSize={13}
-                  fill={COLORS.footprintStroke}
                 />
               </>
             )}
